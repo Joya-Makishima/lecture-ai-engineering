@@ -9,12 +9,12 @@ from metrics import get_metrics_descriptions
 
 # --- チャットページのUI ---
 def display_chat_page(pipe):
-    """チャットページのUIを表示する"""
-    st.subheader("質問を入力してください")
-    user_question = st.text_area("質問", key="question_input", height=100, value=st.session_state.get("current_question", ""))
-    submit_button = st.button("質問を送信")
+    st.markdown("## 💬 AI チャットくん")
+    st.caption("AIに質問してみよう！")
 
-    # セッション状態の初期化（安全のため）
+    # チャット履歴の初期化
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
     if "current_question" not in st.session_state:
         st.session_state.current_question = ""
     if "current_answer" not in st.session_state:
@@ -24,37 +24,47 @@ def display_chat_page(pipe):
     if "feedback_given" not in st.session_state:
         st.session_state.feedback_given = False
 
-    # 質問が送信された場合
-    if submit_button and user_question:
-        st.session_state.current_question = user_question
-        st.session_state.current_answer = "" # 回答をリセット
-        st.session_state.feedback_given = False # フィードバック状態もリセット
+    # 質問フォーム
+    user_question = st.text_area("✍️ 質問をどうぞ！", key="question_input", height=100, value=st.session_state.current_question)
+    if st.button("🚀 質問を送信"):
+        if user_question.strip():
+            st.session_state.current_question = user_question
+            st.session_state.current_answer = ""
+            st.session_state.feedback_given = False
 
-        with st.spinner("モデルが回答を生成中..."):
-            answer, response_time = generate_response(pipe, user_question)
-            st.session_state.current_answer = answer
-            st.session_state.response_time = response_time
-            # ここでrerunすると回答とフィードバックが一度に表示される
-            st.rerun()
+            with st.spinner("🤖 モデルが考え中...少々お待ちを！"):
+                answer, response_time = generate_response(pipe, user_question)
+                st.session_state.current_answer = answer
+                st.session_state.response_time = response_time
+                st.session_state.chat_history.append((user_question, answer))
+                st.rerun()
 
-    # 回答が表示されるべきか判断 (質問があり、回答が生成済みで、まだフィードバックされていない)
-    if st.session_state.current_question and st.session_state.current_answer:
-        st.subheader("回答:")
-        st.markdown(st.session_state.current_answer) # Markdownで表示
-        st.info(f"応答時間: {st.session_state.response_time:.2f}秒")
+    # チャット履歴表示
+    if st.session_state.chat_history:
+        st.markdown("### 📝 チャット履歴")
+        for i, (q, a) in enumerate(reversed(st.session_state.chat_history)):
+            with st.chat_message("user"):
+                st.markdown(f"**Q:** {q}")
+            with st.chat_message("assistant"):
+                st.markdown(f"**A:** {a}")
+                if i == 0:  # 最新の応答に対してのみTTSや評価を表示
+                    st.info(f"⏱ 応答時間: {st.session_state.response_time:.2f} 秒")
+                    st.markdown(f"""
+                        <button onclick="let msg = new SpeechSynthesisUtterance(document.getElementById('last_answer').innerText); 
+                        speechSynthesis.speak(msg);">🔈 回答を読み上げる</button>
+                        <div id="last_answer" style="display:none;">{a}</div>
+                    """, unsafe_allow_html=True)
 
-        # フィードバックフォームを表示 (まだフィードバックされていない場合)
-        if not st.session_state.feedback_given:
-            display_feedback_form()
-        else:
-             # フィードバック送信済みの場合、次の質問を促すか、リセットする
-             if st.button("次の質問へ"):
-                  # 状態をリセット
-                  st.session_state.current_question = ""
-                  st.session_state.current_answer = ""
-                  st.session_state.response_time = 0.0
-                  st.session_state.feedback_given = False
-                  st.rerun() # 画面をクリア
+                    if not st.session_state.feedback_given:
+                        display_feedback_form()
+                    else:
+                        if st.button("🔄 次の質問へ"):
+                            st.session_state.current_question = ""
+                            st.session_state.current_answer = ""
+                            st.session_state.response_time = 0.0
+                            st.session_state.feedback_given = False
+                            st.rerun()
+
 
 
 def display_feedback_form():
