@@ -131,16 +131,36 @@ def latest_model(
 def baseline_model(
     sample_data: pd.DataFrame, preprocessor: ColumnTransformer
 ) -> Pipeline:
-    """基準モデルをロード (無ければ初回に保存)"""
-    if BASELINE_PATH.exists():
-        with open(BASELINE_PATH, "rb") as f:
-            return pickle.load(f)
+    """
+    基準モデルをロード。
+    - pickle が存在し なおかつ sklearn のメジャーバージョンが一致 → そのまま使う
+    - それ以外（無い or 互換性警告発生）→ 再学習して保存し直す
+    """
+    from sklearn import __version__ as skl_ver
 
-    # 初回用: baseline を生成し保存
-    model, _, _ = _train_model(sample_data, preprocessor)
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    with open(BASELINE_PATH, "wb") as f:
-        pickle.dump(model, f)
+    THIS_MAJOR = skl_ver.split(".")[0]
+
+    def _needs_refresh(path: Path) -> bool:
+        if not path.exists():
+            return True
+        # メジャーバージョンが異なるなら作り直し
+        meta_path = path.with_suffix(".meta")
+        if not meta_path.exists():
+            return True
+        saved_major = meta_path.read_text().strip()
+        return saved_major != THIS_MAJOR
+
+    if _needs_refresh(BASELINE_PATH):
+        model, _, _ = _train_model(sample_data, preprocessor)
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        with open(BASELINE_PATH, "wb") as f:
+            pickle.dump(model, f)
+        # pickle と同名の .meta に sklearn major version を保存
+        BASELINE_PATH.with_suffix(".meta").write_text(THIS_MAJOR)
+    else:
+        with open(BASELINE_PATH, "rb") as f:
+            model = pickle.load(f)
+
     return model
 
 
