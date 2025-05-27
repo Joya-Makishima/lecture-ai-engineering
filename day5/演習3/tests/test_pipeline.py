@@ -31,6 +31,7 @@ ACCURACY_THRESHOLD = 0.75
 LATENCY_THRESHOLD = 1.0  # [s]
 RANDOM_STATE = 42
 
+
 def _fetch_titanic_csv(path: Path):
     """Titanic データを取得して CSV 保存 (OpenML)"""
     from sklearn.datasets import fetch_openml
@@ -54,6 +55,7 @@ def _fetch_titanic_csv(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False)
 
+
 @pytest.fixture(scope="session")
 def sample_data():
     """Titanic データフレームを返す (無ければダウンロード)"""
@@ -63,7 +65,7 @@ def sample_data():
 
 
 @pytest.fixture(scope="session")
-def preprocessor() :
+def preprocessor():
     """数値 / カテゴリ前処理パイプライン"""
     numeric_features = ["Age", "Pclass", "SibSp", "Parch", "Fare"]
     categorical_features = ["Sex", "Embarked"]
@@ -90,7 +92,9 @@ def preprocessor() :
     )
 
 
-def _train_model(df: pd.DataFrame, preproc: ColumnTransformer) -> Tuple[Pipeline, pd.DataFrame, pd.Series]:
+def _train_model(
+    df: pd.DataFrame, preproc: ColumnTransformer
+) -> Tuple[Pipeline, pd.DataFrame, pd.Series]:
     """内部ユーティリティ: モデル学習とテストセット返却"""
     X = df.drop("Survived", axis=1)
     y = df["Survived"].astype(int)
@@ -101,7 +105,10 @@ def _train_model(df: pd.DataFrame, preproc: ColumnTransformer) -> Tuple[Pipeline
     model = Pipeline(
         steps=[
             ("preprocessor", preproc),
-            ("classifier", RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE)),
+            (
+                "classifier",
+                RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE),
+            ),
         ]
     )
     model.fit(X_tr, y_tr)
@@ -109,7 +116,9 @@ def _train_model(df: pd.DataFrame, preproc: ColumnTransformer) -> Tuple[Pipeline
 
 
 @pytest.fixture(scope="session")
-def latest_model(sample_data: pd.DataFrame, preprocessor: ColumnTransformer) -> Tuple[Pipeline, pd.DataFrame, pd.Series]:
+def latest_model(
+    sample_data: pd.DataFrame, preprocessor: ColumnTransformer
+) -> Tuple[Pipeline, pd.DataFrame, pd.Series]:
     """最新モデル (毎回再学習) を返す。同時にファイルへ保存"""
     model, X_te, y_te = _train_model(sample_data, preprocessor)
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -119,7 +128,9 @@ def latest_model(sample_data: pd.DataFrame, preprocessor: ColumnTransformer) -> 
 
 
 @pytest.fixture(scope="session")
-def baseline_model(sample_data: pd.DataFrame, preprocessor: ColumnTransformer) -> Pipeline:
+def baseline_model(
+    sample_data: pd.DataFrame, preprocessor: ColumnTransformer
+) -> Pipeline:
     """基準モデルをロード (無ければ初回に保存)"""
     if BASELINE_PATH.exists():
         with open(BASELINE_PATH, "rb") as f:
@@ -131,6 +142,7 @@ def baseline_model(sample_data: pd.DataFrame, preprocessor: ColumnTransformer) -
     with open(BASELINE_PATH, "wb") as f:
         pickle.dump(model, f)
     return model
+
 
 def test_latest_model_exists(latest_model):  # noqa: ANN001
     """モデルファイルが作成されているか"""
@@ -161,7 +173,9 @@ def test_no_regression(latest_model, baseline_model):  # noqa: ANN001
     assert new_acc >= base_acc, f"regression: new {new_acc:.3f} < base {base_acc:.3f}"
 
 
-def test_reproducibility(sample_data: pd.DataFrame, preprocessor: ColumnTransformer):  # noqa: D401, ANN001
+def test_reproducibility(
+    sample_data: pd.DataFrame, preprocessor: ColumnTransformer
+):  # noqa: D401, ANN001
     """同一乱数シードで学習した 2 モデルが同じ予測を返すこと"""
     model1, X_te, _ = _train_model(sample_data, preprocessor)
     model2, _, _ = _train_model(sample_data, preprocessor)
