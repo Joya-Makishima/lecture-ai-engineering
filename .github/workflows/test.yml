@@ -1,10 +1,11 @@
 name: ML Pipeline CI
 
 on:
-  # push:
-  #   branches: [ main, master  ]
+  push:                      # ← push もトリガに
+    branches: [ main, master, develop ]   # 必要なブランチ名を並べる
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   test:
